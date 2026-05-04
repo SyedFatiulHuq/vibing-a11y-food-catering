@@ -1,118 +1,101 @@
-import { useMemo } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { getItemById } from "../data/menus";
-import { useCart } from "../context/CartContext";
-import { formatLongDate, weekdayFromIsoDate } from "../lib/dates";
-import { NutritionTable } from "../components/NutritionTable";
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useCart } from '../context/CartContext';
+import { getItemById } from '../lib/menuData';
+import { itemBelongsToPickupDate } from '../lib/menuForDate';
+import { isValidPickupDate, formatLongDate, parseIsoDate, startOfDay } from '../lib/dates';
+import { formatUsd } from '../lib/money';
+import { NutritionTable } from '../components/NutritionTable';
 
 export function ItemDetailPage() {
-  const { itemId } = useParams();
+  const { date, itemId } = useParams<{ date: string; itemId: string }>();
   const navigate = useNavigate();
-  const { pickupDate, addItem, lines } = useCart();
+  const { addLine, setCateringDate } = useCart();
+  const [notice, setNotice] = useState<string | null>(null);
+  const iso = date ?? '';
+  const today = startOfDay(new Date());
 
-  const item = useMemo(() => (itemId ? getItemById(itemId) : undefined), [itemId]);
+  const dateOk =
+    /^\d{4}-\d{2}-\d{2}$/.test(iso) && isValidPickupDate(parseIsoDate(iso), today);
+  const item = itemId ? getItemById(itemId) : undefined;
+  const match = item && itemBelongsToPickupDate(item.id, iso);
 
-  if (!item) {
+  useEffect(() => {
+    if (dateOk) setCateringDate(iso);
+  }, [dateOk, iso, setCateringDate]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(t);
+  }, [notice]);
+
+  if (!dateOk || !item || !match) {
     return (
-      <div className="container stack">
-        <h1 className="font-display">Item not found</h1>
-        <Link to="/menu">Back to menu</Link>
+      <div className="page">
+        <h1 style={{ fontFamily: 'var(--font-display)' }}>Item not found</h1>
+        <p className="lede">This dish isn’t on the menu for the date you selected.</p>
+        <Link to="/" className="btn btn-primary">
+          Pick a new date
+        </Link>
       </div>
     );
   }
 
-  const dateMismatch =
-    pickupDate && weekdayFromIsoDate(pickupDate) !== item.weekday;
-
-  const onAdd = () => {
-    if (dateMismatch) {
-      window.alert("This item belongs to a different weekday than your selected pickup date. Adjust the date on the menu page first.");
-      return;
-    }
-    addItem(item.id, 1);
-    navigate("/cart");
+  const handleAdd = () => {
+    addLine(item.id, 1, iso);
+    setNotice(`${item.name} added to your cart.`);
   };
 
-  const inCart = lines.find((l) => l.itemId === item.id)?.quantity ?? 0;
-
   return (
-    <div className="container stack" style={{ gap: "1.5rem" }}>
-      <nav aria-label="Breadcrumb" style={{ fontSize: "0.95rem" }}>
-        <Link to="/menu">Menu</Link>
-        <span aria-hidden="true" style={{ marginInline: "0.35rem" }}>
-          /
-        </span>
-        <span>{item.name}</span>
+    <div className="page">
+      <nav aria-label="Breadcrumb" className="no-print" style={{ marginBottom: '1rem', fontSize: '0.95rem' }}>
+        <ol style={{ margin: 0, paddingLeft: '1.2rem' }}>
+          <li style={{ display: 'inline' }}>
+            <Link to="/">Home</Link>
+            <span aria-hidden="true"> · </span>
+          </li>
+          <li style={{ display: 'inline' }}>
+            <Link to={`/menu/${iso}`}>Menu</Link>
+            <span aria-hidden="true"> · </span>
+          </li>
+          <li style={{ display: 'inline' }} aria-current="page">
+            {item.name}
+          </li>
+        </ol>
       </nav>
 
       <div
-        style={{
-          display: "grid",
-          gap: "1.5rem",
-          gridTemplateColumns: "1fr",
-        }}
+        className="split"
+        style={{ gap: '1.5rem', alignItems: 'stretch' }}
       >
-        <div className="card" style={{ overflow: "hidden" }}>
-          <img src={item.imageUrl} alt="" width={720} height={480} style={{ width: "100%", maxHeight: 420, objectFit: "cover" }} />
+        <div style={{ flex: '1 1 280px' }}>
+          <img
+            src={item.imageUrl}
+            alt=""
+            width={800}
+            height={600}
+            style={{ width: '100%', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)' }}
+          />
         </div>
+        <div style={{ flex: '2 1 320px' }} className="stack">
+          <h1 style={{ fontFamily: 'var(--font-display)', margin: 0, lineHeight: 1.2 }}>{item.name}</h1>
+          <p style={{ margin: 0, color: 'var(--muted)' }}>
+            On the menu for <strong>{formatLongDate(parseIsoDate(iso))}</strong>
+          </p>
+          <p style={{ margin: 0, fontSize: '1.1rem' }}>
+            <strong>{formatUsd(item.price)}</strong> · {item.unitLabel}
+          </p>
+          <p style={{ margin: 0 }}>
+            Kitchen capacity for this item today: <strong>{item.quantityAvailable}</strong> units.
+          </p>
+          <p style={{ margin: 0 }}>{item.description}</p>
 
-        <div className="stack" style={{ gap: "1rem" }}>
-          <header>
-            <p style={{ margin: 0, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", fontSize: "0.8rem" }}>
-              {item.category} · {item.weekday}
-            </p>
-            <h1 className="font-display" style={{ margin: "0.35rem 0", fontSize: "2rem" }}>
-              {item.name}
-            </h1>
-            <p style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>
-              {item.priceUsd.toLocaleString(undefined, { style: "currency", currency: "USD" })}{" "}
-              <span style={{ fontWeight: 500, color: "var(--muted)", fontSize: "0.95rem" }}>per unit</span>
-            </p>
-            <p style={{ margin: "0.75rem 0 0", color: "var(--muted)" }}>
-              Each unit serves about {item.portionsPerUnit} guests. Up to {item.availableUnits} units available
-              for the selected pickup week.
-            </p>
-            {pickupDate ? (
-              <p style={{ margin: "0.5rem 0 0", fontSize: "0.95rem" }}>
-                Pickup date: <strong>{formatLongDate(pickupDate)}</strong>
-                {dateMismatch ? (
-                  <span style={{ color: "var(--accent)", display: "block", marginTop: "0.35rem" }}>
-                    This dish is on the {item.weekday} menu. Choose a pickup date that falls on a{" "}
-                    {item.weekday} to add it.
-                  </span>
-                ) : null}
-              </p>
-            ) : (
-              <p style={{ margin: "0.5rem 0 0" }}>Select a pickup date on the menu page before adding items.</p>
-            )}
-          </header>
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
-            <button type="button" className="btn btn-primary" onClick={onAdd} disabled={!pickupDate || !!dateMismatch}>
-              Add to cart
-            </button>
-            <Link className="btn btn-secondary" to="/menu">
-              Back to menu
-            </Link>
-            {inCart > 0 ? (
-              <span style={{ alignSelf: "center", color: "var(--muted)" }}>
-                {inCart} in cart — <Link to="/cart">view cart</Link>
-              </span>
-            ) : null}
-          </div>
-
-          <section>
-            <h2 className="font-display" style={{ fontSize: "1.25rem" }}>
-              Description
-            </h2>
-            <p style={{ margin: 0, maxWidth: "65ch" }}>{item.description}</p>
-          </section>
-
-          <section>
-            <h2 className="font-display" style={{ fontSize: "1.25rem" }}>
+          <section aria-labelledby="ingredients-heading">
+            <h2 id="ingredients-heading" style={{ fontSize: '1.1rem', margin: '0 0 0.35rem' }}>
               Ingredients
             </h2>
-            <ul style={{ margin: 0, paddingLeft: "1.25rem" }}>
+            <ul style={{ margin: 0 }}>
               {item.ingredients.map((ing) => (
                 <li key={ing}>{ing}</li>
               ))}
@@ -120,6 +103,24 @@ export function ItemDetailPage() {
           </section>
 
           <NutritionTable facts={item.nutrition} />
+
+          <div className="split no-print" style={{ alignItems: 'center' }}>
+            <button type="button" className="btn btn-primary" onClick={handleAdd}>
+              Add to cart
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
+              Back
+            </button>
+          </div>
+          <div aria-live="polite" className="visually-hidden">
+            {notice}
+          </div>
+          {notice ? (
+            <p role="status" className="no-print" style={{ margin: 0, fontWeight: 600 }}>
+              {notice}{' '}
+              <Link to="/cart">View cart</Link>.
+            </p>
+          ) : null}
         </div>
       </div>
     </div>

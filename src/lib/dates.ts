@@ -1,74 +1,66 @@
-import type { Weekday } from "../types";
-
-const JS_DAY_TO_WEEKDAY: Weekday[] = [
-  "sunday",
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-];
-
-export function startOfLocalDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+/** Calendar date at local midnight. */
+export function startOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
 }
 
-export function addLocalDays(d: Date, days: number): Date {
-  const next = new Date(d);
-  next.setDate(next.getDate() + days);
-  return next;
+export function addDays(d: Date, days: number): Date {
+  const x = new Date(d);
+  x.setDate(x.getDate() + days);
+  return x;
 }
 
-export function toIsoDateLocal(d: Date): string {
+/** YYYY-MM-DD in local timezone. */
+export function toIsoDate(d: Date): string {
   const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 
-export function parseIsoDateLocal(iso: string): Date {
-  const [y, m, d] = iso.split("-").map(Number);
-  if (!y || !m || !d) throw new Error(`Invalid date: ${iso}`);
-  return new Date(y, m - 1, d);
+export function parseIsoDate(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number);
+  return startOfDay(new Date(y, (m ?? 1) - 1, d ?? 1));
 }
 
-export function weekdayFromIsoDate(iso: string): Weekday {
-  const d = parseIsoDateLocal(iso);
-  return JS_DAY_TO_WEEKDAY[d.getDay()] ?? "monday";
+const WEEKDAYS = [
+  'sunday',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+] as const;
+
+export type WeekdayKey = (typeof WEEKDAYS)[number];
+
+export function weekdayKeyFromDate(d: Date): WeekdayKey {
+  return WEEKDAYS[d.getDay()];
 }
 
-/** Earliest pickup: two full days after today (local). */
-export function minPickupIso(reference = new Date()): string {
-  return toIsoDateLocal(addLocalDays(startOfLocalDay(reference), 2));
-}
-
-/** Latest pickup: two weeks (14 days) after today (local). */
-export function maxPickupIso(reference = new Date()): string {
-  return toIsoDateLocal(addLocalDays(startOfLocalDay(reference), 14));
-}
-
-export function isPickupDateAllowed(
-  iso: string,
-  reference = new Date(),
-): boolean {
-  let candidate: Date;
-  try {
-    candidate = startOfLocalDay(parseIsoDateLocal(iso));
-  } catch {
-    return false;
-  }
-  const min = startOfLocalDay(parseIsoDateLocal(minPickupIso(reference)));
-  const max = startOfLocalDay(parseIsoDateLocal(maxPickupIso(reference)));
-  return candidate >= min && candidate <= max;
-}
-
-export function formatLongDate(iso: string): string {
-  const d = parseIsoDateLocal(iso);
+export function formatLongDate(d: Date): string {
   return d.toLocaleDateString(undefined, {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
   });
+}
+
+/** Pickup must be between 2 and 14 days from today (inclusive of both bounds). */
+export function isValidPickupDate(pickup: Date, today = new Date()): boolean {
+  const t0 = startOfDay(today);
+  const min = addDays(t0, 2);
+  const max = addDays(t0, 14);
+  const p = startOfDay(pickup);
+  return p.getTime() >= min.getTime() && p.getTime() <= max.getTime();
+}
+
+export function pickupRangeLabel(today = new Date()): string {
+  const t0 = startOfDay(today);
+  const min = addDays(t0, 2);
+  const max = addDays(t0, 14);
+  return `${formatLongDate(min)} through ${formatLongDate(max)}`;
 }

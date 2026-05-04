@@ -3,146 +3,146 @@ import {
   useCallback,
   useContext,
   useMemo,
-  useReducer,
+  useState,
   type ReactNode,
-} from "react";
-import type { CartLine } from "../types";
+} from 'react';
+import type { CartLine } from '../types';
 
-type CartState = {
-  pickupDate: string | null;
+interface CartContextValue {
+  /** Catering / pickup date for the entire cart (YYYY-MM-DD). */
+  cateringDate: string | null;
+  setCateringDate: (iso: string | null) => void;
   lines: CartLine[];
-};
-
-type Action =
-  | { type: "SET_PICKUP_DATE"; iso: string | null }
-  | { type: "ADD_ITEM"; itemId: string; quantity: number }
-  | { type: "SET_LINE_QTY"; itemId: string; quantity: number }
-  | { type: "REMOVE_LINE"; itemId: string }
-  | { type: "CLEAR" };
-
-function reducer(state: CartState, action: Action): CartState {
-  switch (action.type) {
-    case "SET_PICKUP_DATE": {
-      if (action.iso === null) {
-        return { pickupDate: null, lines: [] };
-      }
-      const dateChanged =
-        state.pickupDate !== null &&
-        state.pickupDate !== action.iso &&
-        state.lines.length > 0;
-      return {
-        pickupDate: action.iso,
-        lines: dateChanged ? [] : state.lines,
-      };
-    }
-    case "ADD_ITEM": {
-      const existing = state.lines.find((l) => l.itemId === action.itemId);
-      if (existing) {
-        return {
-          ...state,
-          lines: state.lines.map((l) =>
-            l.itemId === action.itemId
-              ? { ...l, quantity: l.quantity + action.quantity }
-              : l,
-          ),
-        };
-      }
-      return {
-        ...state,
-        lines: [...state.lines, { itemId: action.itemId, quantity: action.quantity }],
-      };
-    }
-    case "SET_LINE_QTY": {
-      const q = Math.max(0, Math.floor(action.quantity));
-      if (q === 0) {
-        return {
-          ...state,
-          lines: state.lines.filter((l) => l.itemId !== action.itemId),
-        };
-      }
-      return {
-        ...state,
-        lines: state.lines.map((l) =>
-          l.itemId === action.itemId ? { ...l, quantity: q } : l,
-        ),
-      };
-    }
-    case "REMOVE_LINE":
-      return {
-        ...state,
-        lines: state.lines.filter((l) => l.itemId !== action.itemId),
-      };
-    case "CLEAR":
-      return { pickupDate: null, lines: [] };
-  }
-}
-
-type CartContextValue = {
-  pickupDate: string | null;
-  lines: CartLine[];
-  setPickupDate: (iso: string | null) => void;
-  addItem: (itemId: string, quantity?: number) => void;
-  setLineQuantity: (itemId: string, quantity: number) => void;
-  removeLine: (itemId: string) => void;
+  /** Optional `forDate` scopes the add when the cart date is not set yet or must match the menu date. */
+  addLine: (itemId: string, quantity?: number, forDate?: string) => void;
+  setLineQuantity: (itemId: string, cateringDate: string, quantity: number) => void;
+  removeLine: (itemId: string, cateringDate: string) => void;
   clearCart: () => void;
-};
+  cartCount: number;
+}
 
 const CartContext = createContext<CartContextValue | null>(null);
 
+const CART_KEY = 'homespun-kitchen-cart';
+
+function loadInitial(): { cateringDate: string | null; lines: CartLine[] } {
+  try {
+    const raw = localStorage.getItem(CART_KEY);
+    if (!raw) return { cateringDate: null, lines: [] };
+    const parsed = JSON.parse(raw) as { cateringDate?: string | null; lines?: CartLine[] };
+    const lines = Array.isArray(parsed.lines) ? parsed.lines : [];
+    return {
+      cateringDate: parsed.cateringDate ?? lines[0]?.cateringDate ?? null,
+      lines,
+    };
+  } catch {
+    return { cateringDate: null, lines: [] };
+  }
+}
+
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, {
-    pickupDate: null,
-    lines: [],
-  } satisfies CartState);
+  const initial = loadInitial();
+  const [cateringDate, setCateringDateState] = useState<string | null>(initial.cateringDate);
+  const [lines, setLines] = useState<CartLine[]>(initial.lines);
 
-  const setPickupDate = useCallback((iso: string | null) => {
-    dispatch({ type: "SET_PICKUP_DATE", iso });
+  const persist = useCallback((nextDate: string | null, nextLines: CartLine[]) => {
+    localStorage.setItem(CART_KEY, JSON.stringify({ cateringDate: nextDate, lines: nextLines }));
   }, []);
 
-  const addItem = useCallback((itemId: string, quantity = 1) => {
-    dispatch({ type: "ADD_ITEM", itemId, quantity });
-  }, []);
+  const setCateringDate = useCallback(
+    (iso: string | null) => {
+      setCateringDateState(iso);
+      if (iso === null) {
+        setLines([]);
+        persist(null, []);
+      } else {
+        setLines((prev) => {
+          const cleared = prev.filter((l) => l.cateringDate === iso);
+          persist(iso, cleared);
+          return cleared;
+        });
+      }
+    },
+    [persist],
+  );
 
-  const setLineQuantity = useCallback((itemId: string, quantity: number) => {
-    dispatch({ type: "SET_LINE_QTY", itemId, quantity });
-  }, []);
+  const addLine = useCallback(
+    (itemId: string, quantity = 1, forDate?: string) => {
+      const target = forDate ?? cateringDate;
+      if (!target) return;
+      setCateringDateState(target);
+      setLines((prev) => {
+        const scoped = prev.filter((l) => l.cateringDate === target);
+        const existing = scoped.find((l) => l.itemId === itemId);
+        let next: CartLine[];
+        if (existing) {
+          const merged = scoped.map((l) =>
+            l.itemId === itemId ? { ...l, quantity: l.quantity + quantity } : l,
+          );
+          next = merged;
+        } else {
+          next = [...scoped, { itemId, cateringDate: target, quantity }];
+        }
+        persist(target, next);
+        return next;
+      });
+    },
+    [cateringDate, persist],
+  );
 
-  const removeLine = useCallback((itemId: string) => {
-    dispatch({ type: "REMOVE_LINE", itemId });
-  }, []);
+  const setLineQuantity = useCallback(
+    (itemId: string, date: string, quantity: number) => {
+      setLines((prev) => {
+        const next =
+          quantity <= 0
+            ? prev.filter((l) => !(l.itemId === itemId && l.cateringDate === date))
+            : prev.map((l) =>
+                l.itemId === itemId && l.cateringDate === date ? { ...l, quantity } : l,
+              );
+        persist(cateringDate, next);
+        return next;
+      });
+    },
+    [cateringDate, persist],
+  );
+
+  const removeLine = useCallback(
+    (itemId: string, date: string) => {
+      setLines((prev) => {
+        const next = prev.filter((l) => !(l.itemId === itemId && l.cateringDate === date));
+        persist(cateringDate, next);
+        return next;
+      });
+    },
+    [cateringDate, persist],
+  );
 
   const clearCart = useCallback(() => {
-    dispatch({ type: "CLEAR" });
-  }, []);
+    setLines([]);
+    persist(cateringDate, []);
+  }, [cateringDate, persist]);
+
+  const cartCount = useMemo(() => lines.reduce((s, l) => s + l.quantity, 0), [lines]);
 
   const value = useMemo(
     () => ({
-      pickupDate: state.pickupDate,
-      lines: state.lines,
-      setPickupDate,
-      addItem,
+      cateringDate,
+      setCateringDate,
+      lines,
+      addLine,
       setLineQuantity,
       removeLine,
       clearCart,
+      cartCount,
     }),
-    [
-      state.pickupDate,
-      state.lines,
-      setPickupDate,
-      addItem,
-      setLineQuantity,
-      removeLine,
-      clearCart,
-    ],
+    [cateringDate, setCateringDate, lines, addLine, setLineQuantity, removeLine, clearCart, cartCount],
   );
 
-  return (
-    <CartContext.Provider value={value}>{children}</CartContext.Provider>
-  );
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
 export function useCart(): CartContextValue {
   const ctx = useContext(CartContext);
-  if (!ctx) throw new Error("useCart must be used within CartProvider");
+  if (!ctx) throw new Error('useCart must be used within CartProvider');
   return ctx;
 }

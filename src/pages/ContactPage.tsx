@@ -1,99 +1,101 @@
-import { FormEvent, useState } from "react";
-import { saveContactMessage } from "../lib/invoices";
-import type { ContactSubmission } from "../types";
+import { FormEvent, useState } from 'react';
+import { saveContactMessage } from '../lib/contactStore';
 
 export function ContactPage() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [topic, setTopic] = useState("Catering question");
-  const [message, setMessage] = useState("");
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [topic, setTopic] = useState('Catering question');
+  const [message, setMessage] = useState('');
   const [sent, setSent] = useState(false);
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const submission: ContactSubmission = {
-      id: `MSG-${Date.now()}`,
-      createdAtIso: new Date().toISOString(),
+    const entry = {
+      id: `msg-${Date.now().toString(36)}`,
+      sentAt: new Date().toISOString(),
       name: name.trim(),
       email: email.trim(),
       topic,
       message: message.trim(),
     };
-    saveContactMessage(submission);
+    saveContactMessage(entry);
     setSent(true);
-    setMessage("");
+    setName('');
+    setEmail('');
+    setMessage('');
   };
 
   return (
-    <div className="container stack" style={{ gap: "1.5rem" }}>
-      <header className="stack" style={{ gap: "0.5rem", maxWidth: 720 }}>
-        <h1 className="font-display" style={{ margin: 0, fontSize: "2rem" }}>
-          Contact
-        </h1>
-        <p style={{ margin: 0, color: "var(--muted)" }}>
-          Reach the kitchen for custom pickups, dietary questions, or partnership ideas. Messages submitted
-          through the form are stored locally in this browser for the owner to review later.
-        </p>
-      </header>
+    <div className="page">
+      <h1 style={{ fontFamily: 'var(--font-display)' }}>Contact</h1>
+      <p className="lede">
+        Reach the kitchen by phone or social, or send a note through the form — submissions are stored in this
+        browser for the owner to review (demo behavior).
+      </p>
 
-      <section aria-labelledby="direct-heading" className="card" style={{ padding: "1.25rem", maxWidth: 720 }}>
-        <h2 id="direct-heading" className="font-display" style={{ fontSize: "1.25rem", marginTop: 0 }}>
-          Call or follow along
+      <section aria-labelledby="direct-heading" className="stack" style={{ marginBottom: '2rem' }}>
+        <h2 id="direct-heading" style={{ fontFamily: 'var(--font-display)', fontSize: '1.35rem', margin: 0 }}>
+          Direct lines
         </h2>
-        <ul style={{ margin: 0, paddingLeft: "1.25rem", lineHeight: 1.7 }}>
+        <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
           <li>
             Phone: <a href="tel:+15555550123">(555) 555-0123</a> · daily 9a–6p
           </li>
           <li>
-            Instagram:{" "}
-            <a href="https://www.instagram.com/" target="_blank" rel="noreferrer">
-              @harvesttablekitchen
-            </a>{" "}
-            (placeholder)
+            Instagram:{' '}
+            <a href="https://www.instagram.com/homespunkitchen" target="_blank" rel="noreferrer">
+              @homespunkitchen
+            </a>
           </li>
           <li>
-            Facebook:{" "}
-            <a href="https://www.facebook.com/" target="_blank" rel="noreferrer">
-              Harvest Table Community
-            </a>{" "}
-            (placeholder)
+            Facebook:{' '}
+            <a href="https://www.facebook.com/homespunkitchen" target="_blank" rel="noreferrer">
+              HomeSpun Kitchen
+            </a>
           </li>
         </ul>
       </section>
 
-      <section aria-labelledby="form-heading" className="card" style={{ padding: "1.25rem", maxWidth: 720 }}>
-        <h2 id="form-heading" className="font-display" style={{ fontSize: "1.25rem", marginTop: 0 }}>
-          Send a note
+      <section aria-labelledby="form-heading">
+        <h2 id="form-heading" style={{ fontFamily: 'var(--font-display)', fontSize: '1.35rem', margin: 0 }}>
+          Send a message
         </h2>
         {sent ? (
-          <p role="status" style={{ color: "var(--success)", fontWeight: 600 }}>
-            Thanks — your message was saved for the owner on this device.
+          <p role="status" style={{ fontWeight: 600 }}>
+            Thanks — your note was saved locally for follow-up.
           </p>
         ) : null}
-        <form className="stack" style={{ gap: "1rem", marginTop: "1rem" }} onSubmit={onSubmit}>
+        <form onSubmit={onSubmit} style={{ maxWidth: '36rem' }} noValidate>
           <div className="field">
             <label htmlFor="c-name">Name</label>
-            <input id="c-name" value={name} onChange={(e) => setName(e.target.value)} required />
+            <input id="c-name" name="name" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
           <div className="field">
             <label htmlFor="c-email">Email</label>
-            <input id="c-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <input
+              id="c-email"
+              name="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
           </div>
           <div className="field">
             <label htmlFor="c-topic">Topic</label>
-            <select id="c-topic" value={topic} onChange={(e) => setTopic(e.target.value)}>
+            <select id="c-topic" name="topic" value={topic} onChange={(e) => setTopic(e.target.value)}>
               <option>Catering question</option>
-              <option>Dietary accommodations</option>
-              <option>Pickup logistics</option>
-              <option>Something else</option>
+              <option>Dietary needs</option>
+              <option>Pickup timing</option>
+              <option>Partnerships</option>
             </select>
           </div>
           <div className="field">
-            <label htmlFor="c-msg">Message</label>
-            <textarea id="c-msg" value={message} onChange={(e) => setMessage(e.target.value)} required />
+            <label htmlFor="c-message">Message</label>
+            <textarea id="c-message" name="message" value={message} onChange={(e) => setMessage(e.target.value)} required />
           </div>
           <button type="submit" className="btn btn-primary">
-            Send message
+            Save message
           </button>
         </form>
       </section>

@@ -1,72 +1,65 @@
-import type { NutritionFacts } from "../types";
+import type { NutritionalFacts } from '../types';
 
-type Props = { facts: NutritionFacts };
+interface Props {
+  facts: NutritionalFacts;
+  caption?: string;
+}
 
-export function NutritionTable({ facts }: Props) {
-  const rows: { label: string; value: string; emphasis?: boolean }[] = [
-    { label: "Serving size", value: facts.servingSize, emphasis: true },
-    { label: "Calories", value: String(facts.calories), emphasis: true },
-    { label: "Total Fat", value: `${facts.totalFatG}g` },
-    { label: "Saturated Fat", value: `${facts.saturatedFatG}g` },
-    { label: "Cholesterol", value: `${facts.cholesterolMg}mg` },
-    { label: "Sodium", value: `${facts.sodiumMg}mg` },
-    { label: "Total Carbohydrate", value: `${facts.totalCarbG}g` },
-    { label: "Dietary Fiber", value: `${facts.dietaryFiberG}g` },
-    { label: "Total Sugars", value: `${facts.totalSugarsG}g` },
-    { label: "Protein", value: `${facts.proteinG}g` },
-  ];
-
+export function NutritionTable({ facts, caption = 'Nutrition facts' }: Props) {
   return (
     <section aria-labelledby="nutrition-heading">
-      <h3 id="nutrition-heading" className="font-display" style={{ marginTop: 0 }}>
-        Nutrition facts
+      <h3 id="nutrition-heading" style={{ fontSize: '1.05rem', margin: '0 0 0.5rem' }}>
+        {caption}
       </h3>
-      <p style={{ marginTop: 0, color: "var(--muted)", fontSize: "0.9rem" }}>
-        Typical values per portion. Homemade batches may vary slightly.
-      </p>
-      <table
-        style={{
-          border: "2px solid var(--ink)",
-          borderRadius: "var(--radius-sm)",
-          borderCollapse: "collapse",
-          overflow: "hidden",
-          width: "100%",
-          maxWidth: 360,
-        }}
-      >
-        <caption className="sr-only">Nutrition facts per portion</caption>
-        <tbody>
-          {rows.map((r) => (
-            <tr
-              key={r.label}
-              style={{
-                borderTop: "1px solid var(--line)",
-                background: r.emphasis ? "#f7f2ea" : "#fff",
-              }}
-            >
-              <th
-                scope="row"
-                style={{
-                  textAlign: "left",
-                  padding: "0.45rem 0.65rem",
-                  fontWeight: r.emphasis ? 700 : 500,
-                }}
-              >
-                {r.label}
-              </th>
-              <td
-                style={{
-                  textAlign: "right",
-                  padding: "0.45rem 0.65rem",
-                  fontWeight: r.emphasis ? 700 : 400,
-                }}
-              >
-                {r.value}
-              </td>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="nutrition-table" aria-labelledby="nutrition-heading">
+          <tbody>
+            <tr>
+              <th scope="row">Serving size</th>
+              <td>{facts.servingSize}</td>
             </tr>
-          ))}
-        </tbody>
-      </table>
+            <tr>
+              <th scope="row">Calories</th>
+              <td>{facts.calories}</td>
+            </tr>
+            <tr>
+              <th scope="row">Total fat</th>
+              <td>{facts.totalFatG} g</td>
+            </tr>
+            <tr>
+              <th scope="row">Saturated fat</th>
+              <td>{facts.saturatedFatG} g</td>
+            </tr>
+            <tr>
+              <th scope="row">Cholesterol</th>
+              <td>{facts.cholesterolMg} mg</td>
+            </tr>
+            <tr>
+              <th scope="row">Sodium</th>
+              <td>{facts.sodiumMg} mg</td>
+            </tr>
+            <tr>
+              <th scope="row">Total carbohydrate</th>
+              <td>{facts.totalCarbG} g</td>
+            </tr>
+            <tr>
+              <th scope="row">Dietary fiber</th>
+              <td>{facts.dietaryFiberG} g</td>
+            </tr>
+            <tr>
+              <th scope="row">Total sugars</th>
+              <td>{facts.totalSugarsG} g</td>
+            </tr>
+            <tr>
+              <th scope="row">Protein</th>
+              <td>{facts.proteinG} g</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '0.5rem' }}>
+        Values are approximate; prepared in a home kitchen that may use shared equipment.
+      </p>
     </section>
   );
 }

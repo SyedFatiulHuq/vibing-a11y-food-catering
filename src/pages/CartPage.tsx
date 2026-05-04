@@ -1,127 +1,126 @@
-import { useMemo } from "react";
-import { Link } from "react-router-dom";
-import { getItemById } from "../data/menus";
-import { useCart } from "../context/CartContext";
-import { formatLongDate } from "../lib/dates";
+import { Link } from 'react-router-dom';
+import { useCart } from '../context/CartContext';
+import { getItemById } from '../lib/menuData';
+import { formatUsd } from '../lib/money';
+import { formatLongDate, isValidPickupDate, parseIsoDate, startOfDay } from '../lib/dates';
 
 export function CartPage() {
-  const { pickupDate, lines, setLineQuantity, removeLine, clearCart } = useCart();
+  const { lines, cateringDate, setLineQuantity, removeLine, clearCart } = useCart();
+  const today = startOfDay(new Date());
+  const dateValid = cateringDate ? isValidPickupDate(parseIsoDate(cateringDate), today) : false;
 
-  const rows = useMemo(() => {
-    return lines
-      .map((line) => {
-        const item = getItemById(line.itemId);
-        if (!item) return null;
-        return { line, item, subtotal: item.priceUsd * line.quantity };
-      })
-      .filter(Boolean) as { line: { itemId: string; quantity: number }; item: NonNullable<ReturnType<typeof getItemById>>; subtotal: number }[];
-  }, [lines]);
-
-  const total = rows.reduce((s, r) => s + r.subtotal, 0);
-
-  if (!pickupDate || lines.length === 0) {
+  if (!cateringDate || lines.length === 0) {
     return (
-      <div className="container stack" style={{ maxWidth: 560 }}>
-        <h1 className="font-display" style={{ margin: 0 }}>
-          Your cart is empty
-        </h1>
-        <p style={{ margin: 0, color: "var(--muted)" }}>
-          Browse a pickup date on the menu and add trays. Portions are planned for groups of 6–30 guests.
-        </p>
-        <Link className="btn btn-primary" to="/menu" style={{ alignSelf: "flex-start" }}>
-          Browse menus
+      <div className="page">
+        <h1 style={{ fontFamily: 'var(--font-display)' }}>Your cart is empty</h1>
+        <p className="lede">Browse a menu for your pickup date and add trays from an item’s detail page.</p>
+        <Link to="/" className="btn btn-primary">
+          Choose a pickup date
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="container stack" style={{ gap: "1.25rem" }}>
-      <header style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "1rem", alignItems: "baseline" }}>
-        <div>
-          <h1 className="font-display" style={{ margin: 0, fontSize: "2rem" }}>
-            Cart
-          </h1>
-          <p style={{ margin: "0.35rem 0 0", color: "var(--muted)" }}>
-            Pickup {formatLongDate(pickupDate)}
-          </p>
-        </div>
-        <button type="button" className="btn btn-ghost" onClick={() => clearCart()}>
-          Clear cart
-        </button>
-      </header>
+    <div className="page">
+      <h1 style={{ fontFamily: 'var(--font-display)', marginBottom: '0.25rem' }}>Cart</h1>
+      <p style={{ marginTop: 0, color: 'var(--muted)' }}>
+        Catering date:{' '}
+        <strong>{formatLongDate(parseIsoDate(cateringDate))}</strong> ·{' '}
+        <Link to={`/menu/${cateringDate}`}>Return to menu</Link>
+      </p>
 
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <caption className="sr-only">Shopping cart items</caption>
-          <thead>
-            <tr style={{ textAlign: "left", background: "#f7f2ea" }}>
-              <th scope="col" style={{ padding: "0.75rem 1rem" }}>
-                Item
-              </th>
-              <th scope="col" style={{ padding: "0.75rem 0.5rem" }}>
-                Price
-              </th>
-              <th scope="col" style={{ padding: "0.75rem 0.5rem" }}>
-                Qty
-              </th>
-              <th scope="col" style={{ padding: "0.75rem 1rem", textAlign: "right" }}>
-                Subtotal
-              </th>
-              <th scope="col" style={{ padding: "0.75rem 1rem" }}>
-                <span className="sr-only">Remove</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(({ line, item, subtotal }) => (
-              <tr key={line.itemId} style={{ borderTop: "1px solid var(--line)" }}>
-                <td style={{ padding: "0.85rem 1rem" }}>
-                  <Link to={`/menu/item/${item.id}`} style={{ fontWeight: 600, color: "var(--ink)" }}>
+      {!dateValid ? (
+        <div role="alert" className="error-text" style={{ marginBottom: '1rem' }}>
+          This pickup date is no longer in the order window (2–14 days out). Clear the cart and pick a new date
+          on the home page.
+        </div>
+      ) : null}
+
+      <ul className="stack" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+        {lines.map((line) => {
+          const item = getItemById(line.itemId);
+          if (!item) return null;
+          const lineTotal = item.price * line.quantity;
+          return (
+            <li key={`${line.itemId}-${line.cateringDate}`} className="card" style={{ padding: '1rem' }}>
+              <div className="split" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ flex: '1 1 220px' }}>
+                  <h2 style={{ fontSize: '1.15rem', margin: '0 0 0.35rem', fontFamily: 'var(--font-display)' }}>
                     {item.name}
-                  </Link>
-                  <div style={{ fontSize: "0.85rem", color: "var(--muted)" }}>{item.category}</div>
-                </td>
-                <td style={{ padding: "0.85rem 0.5rem", whiteSpace: "nowrap" }}>
-                  {item.priceUsd.toLocaleString(undefined, { style: "currency", currency: "USD" })}
-                </td>
-                <td style={{ padding: "0.85rem 0.5rem" }}>
-                  <label className="sr-only" htmlFor={`qty-${item.id}`}>
+                  </h2>
+                  <p className="meta" style={{ margin: 0 }}>
+                    {formatUsd(item.price)} · {item.unitLabel}
+                  </p>
+                  <p style={{ margin: '0.35rem 0 0', fontWeight: 600 }}>Line total: {formatUsd(lineTotal)}</p>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-end' }}>
+                  <label htmlFor={`qty-${line.itemId}`} className="visually-hidden">
                     Quantity for {item.name}
                   </label>
-                  <input
-                    id={`qty-${item.id}`}
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    max={99}
-                    value={line.quantity}
-                    onChange={(e) => setLineQuantity(item.id, Number(e.target.value))}
-                    style={{ width: 72, padding: "0.35rem" }}
-                  />
-                </td>
-                <td style={{ padding: "0.85rem 1rem", textAlign: "right", fontWeight: 600 }}>
-                  {subtotal.toLocaleString(undefined, { style: "currency", currency: "USD" })}
-                </td>
-                <td style={{ padding: "0.85rem 1rem" }}>
-                  <button type="button" className="btn btn-ghost" onClick={() => removeLine(item.id)}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      aria-label={`Decrease ${item.name}`}
+                      onClick={() =>
+                        setLineQuantity(line.itemId, line.cateringDate, Math.max(0, line.quantity - 1))
+                      }
+                    >
+                      −
+                    </button>
+                    <input
+                      id={`qty-${line.itemId}`}
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      value={line.quantity}
+                      onChange={(e) => {
+                        const v = Number.parseInt(e.target.value, 10);
+                        setLineQuantity(line.itemId, line.cateringDate, Number.isFinite(v) ? v : 0);
+                      }}
+                      style={{ width: '4rem', textAlign: 'center' }}
+                      aria-describedby={`qty-help-${line.itemId}`}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      aria-label={`Increase ${item.name}`}
+                      onClick={() => setLineQuantity(line.itemId, line.cateringDate, line.quantity + 1)}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <span id={`qty-help-${line.itemId}`} className="visually-hidden">
+                    Number of units for this line item.
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => removeLine(line.itemId, line.cateringDate)}
+                  >
                     Remove
                   </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
 
-      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
-        <p style={{ margin: 0, fontSize: "1.1rem" }}>
-          Estimated food total:{" "}
-          <strong>{total.toLocaleString(undefined, { style: "currency", currency: "USD" })}</strong>
-        </p>
-        <Link className="btn btn-primary" to="/checkout">
-          Continue to checkout
-        </Link>
+      <div className="split no-print" style={{ marginTop: '1.5rem', alignItems: 'center' }}>
+        <button type="button" className="btn btn-secondary" onClick={() => clearCart()}>
+          Clear cart
+        </button>
+        {dateValid ? (
+          <Link to="/checkout" className="btn btn-primary">
+            Continue to checkout
+          </Link>
+        ) : (
+          <button type="button" className="btn btn-primary" disabled>
+            Choose a valid pickup date to continue
+          </button>
+        )}
       </div>
     </div>
   );

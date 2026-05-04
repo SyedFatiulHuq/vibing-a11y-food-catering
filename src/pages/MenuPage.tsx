@@ -1,145 +1,119 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { getMenuForWeekday } from "../data/menus";
-import { useCart } from "../context/CartContext";
-import {
-  formatLongDate,
-  isPickupDateAllowed,
-  maxPickupIso,
-  minPickupIso,
-  weekdayFromIsoDate,
-} from "../lib/dates";
-import type { FoodItem, MenuCategory } from "../types";
+import { useEffect, useMemo } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { useCart } from '../context/CartContext';
+import { getMenuForPickupDate } from '../lib/menuForDate';
+import { isValidPickupDate, formatLongDate, parseIsoDate, startOfDay } from '../lib/dates';
+import type { Category, FoodItem } from '../types';
+import { formatUsd } from '../lib/money';
 
-const categoryOrder: MenuCategory[] = ["protein", "vegetarian", "side"];
+const CATEGORY_ORDER: Category[] = ['protein', 'vegetarian', 'sides'];
 
-const categoryTitle: Record<MenuCategory, string> = {
-  protein: "Proteins",
-  vegetarian: "Vegetarian",
-  side: "Sides",
+const labels: Record<Category, string> = {
+  protein: 'Protein',
+  vegetarian: 'Vegetarian',
+  sides: 'Sides',
 };
 
-function groupByCategory(items: FoodItem[]): Record<MenuCategory, FoodItem[]> {
-  const map: Record<MenuCategory, FoodItem[]> = {
+function groupByCategory(items: FoodItem[]): Record<Category, FoodItem[]> {
+  const empty: Record<Category, FoodItem[]> = {
     protein: [],
     vegetarian: [],
-    side: [],
+    sides: [],
   };
   for (const item of items) {
-    map[item.category].push(item);
+    empty[item.category].push(item);
   }
-  return map;
+  return empty;
 }
 
 export function MenuPage() {
-  const { pickupDate, setPickupDate, lines, addItem } = useCart();
-  const [selected, setSelected] = useState(() => pickupDate ?? minPickupIso());
+  const { date } = useParams<{ date: string }>();
+  const { setCateringDate } = useCart();
+  const iso = date ?? '';
+  const today = useMemo(() => startOfDay(new Date()), []);
+
+  const valid = useMemo(() => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+    return isValidPickupDate(parseIsoDate(iso), today);
+  }, [iso, today]);
+
+  const menu = valid ? getMenuForPickupDate(iso) : [];
 
   useEffect(() => {
-    if (pickupDate && pickupDate !== selected) {
-      setSelected(pickupDate);
-    }
-  }, [pickupDate, selected]);
+    if (valid) setCateringDate(iso);
+  }, [iso, valid, setCateringDate]);
 
-  const min = minPickupIso();
-  const max = maxPickupIso();
+  if (!valid) {
+    return (
+      <div className="page">
+        <h1 style={{ fontFamily: 'var(--font-display)' }}>Menu not available for that date</h1>
+        <p className="lede">
+          Pickup dates must be at least two days and at most two weeks from today. Return home to pick a date
+          in range.
+        </p>
+        <Link to="/" className="btn btn-primary">
+          Choose a date
+        </Link>
+      </div>
+    );
+  }
 
-  const onDateChange = (iso: string) => {
-    if (!isPickupDateAllowed(iso)) return;
-    if (lines.length > 0 && pickupDate && pickupDate !== iso) {
-      const ok = window.confirm(
-        "Changing the pickup date clears your cart because each date uses that day’s menu. Continue?",
-      );
-      if (!ok) return;
-    }
-    setSelected(iso);
-    setPickupDate(iso);
-  };
-
-  useEffect(() => {
-    if (!pickupDate && isPickupDateAllowed(selected)) {
-      setPickupDate(selected);
-    }
-  }, [pickupDate, selected, setPickupDate]);
-
-  const weekday = weekdayFromIsoDate(selected);
-  const items = useMemo(() => getMenuForWeekday(weekday), [weekday]);
-  const grouped = useMemo(() => groupByCategory(items), [items]);
+  const grouped = groupByCategory(menu);
 
   return (
-    <div className="container stack" style={{ gap: "1.75rem" }}>
-      <header className="stack" style={{ gap: "0.5rem" }}>
-        <h1 className="font-display" style={{ margin: 0, fontSize: "2rem" }}>
-          Menu for your pickup date
-        </h1>
-        <p style={{ margin: 0, color: "var(--muted)", maxWidth: "60ch" }}>
-          Each weekday has a unique ten-item menu (five proteins, three vegetarian dishes, and two
-          sides). Choose the calendar day you plan to pick up—your menu matches that day of the week.
-        </p>
-      </header>
-
-      <div className="card" style={{ padding: "1.25rem" }}>
-        <div className="field" style={{ maxWidth: 320 }}>
-          <label htmlFor="pickup-date">Pickup date</label>
-          <input
-            id="pickup-date"
-            type="date"
-            min={min}
-            max={max}
-            value={selected}
-            onChange={(e) => onDateChange(e.target.value)}
-          />
-        </div>
-        <p style={{ margin: "0.75rem 0 0", fontSize: "0.95rem", color: "var(--muted)" }}>
-          {formatLongDate(selected)} · Orders open from {formatLongDate(min)} through {formatLongDate(max)}.
+    <div className="page">
+      <div className="hero">
+        <h1 style={{ marginBottom: '0.5rem' }}>Menu for {formatLongDate(parseIsoDate(iso))}</h1>
+        <p className="lede" style={{ marginBottom: 0 }}>
+          This is the menu for the day of the week of your event. Tap an item for ingredients and nutrition. All
+          items are prepared for pickup; portion your order for a group of 6–30 at checkout.
         </p>
       </div>
 
-      {categoryOrder.map((cat) => (
-        <section key={cat} aria-labelledby={`cat-${cat}`}>
-          <h2 id={`cat-${cat}`} className="font-display" style={{ fontSize: "1.35rem" }}>
-            {categoryTitle[cat]}
+      {CATEGORY_ORDER.map((cat) => (
+        <section
+          key={cat}
+          aria-labelledby={`cat-${cat}`}
+          style={{ marginTop: '2rem' }}
+        >
+          <h2 id={`cat-${cat}`} style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', margin: '0 0 1rem' }}>
+            {labels[cat]}
           </h2>
-          <div className="grid-menu">
+          <div className="card-grid">
             {grouped[cat].map((item) => (
-              <article
-                key={item.id}
-                className="card"
-                style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}
-              >
-                <Link to={`/menu/item/${item.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+              <article key={item.id} className="card">
+                <Link
+                  to={`/menu/${iso}/item/${item.id}`}
+                  style={{ textDecoration: 'none', color: 'inherit' }}
+                >
                   <img
                     src={item.imageUrl}
                     alt=""
-                    width={720}
-                    height={480}
-                    style={{ width: "100%", height: 180, objectFit: "cover" }}
+                    width={800}
+                    height={600}
+                    loading="lazy"
+                    style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover' }}
                   />
-                  <div style={{ padding: "1rem", flex: 1, display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                    <h3 className="font-display" style={{ margin: 0, fontSize: "1.15rem" }}>
-                      {item.name}
-                    </h3>
-                    <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.9rem", flex: 1 }}>
-                      Serves about {item.portionsPerUnit} guests per unit · {item.availableUnits} units
-                      available today
-                    </p>
-                    <p style={{ margin: 0, fontWeight: 700 }}>
-                      {item.priceUsd.toLocaleString(undefined, { style: "currency", currency: "USD" })}{" "}
-                      <span style={{ fontWeight: 500, color: "var(--muted)", fontSize: "0.9rem" }}>per unit</span>
-                    </p>
-                  </div>
                 </Link>
-                <div style={{ padding: "0 1rem 1rem", display: "flex", gap: "0.5rem" }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    style={{ flex: 1 }}
-                    onClick={() => addItem(item.id, 1)}
-                  >
-                    Add to cart
-                  </button>
-                  <Link className="btn btn-secondary" to={`/menu/item/${item.id}`}>
-                    Details
+                <div className="card-body">
+                  <span className="pill">{labels[cat]}</span>
+                  <h3 className="card-title">
+                    <Link
+                      to={`/menu/${iso}/item/${item.id}`}
+                      style={{ color: 'inherit', textDecoration: 'none' }}
+                    >
+                      {item.name}
+                    </Link>
+                  </h3>
+                  <p className="meta" style={{ margin: 0 }}>
+                    {formatUsd(item.price)} · {item.unitLabel}
+                  </p>
+                  <p className="meta" style={{ margin: 0 }}>
+                    Available today: <strong>{item.quantityAvailable}</strong> units
+                  </p>
+                  <p style={{ margin: 0, flex: 1, fontSize: '0.95rem' }}>{item.description}</p>
+                  <Link className="btn btn-secondary" to={`/menu/${iso}/item/${item.id}`} style={{ alignSelf: 'flex-start' }}>
+                    Details & add to cart
                   </Link>
                 </div>
               </article>
@@ -147,6 +121,12 @@ export function MenuPage() {
           </div>
         </section>
       ))}
+
+      <p style={{ marginTop: '2rem' }}>
+        <Link to="/cart" className="btn btn-primary">
+          View cart
+        </Link>
+      </p>
     </div>
   );
 }
